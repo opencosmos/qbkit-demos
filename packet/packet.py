@@ -78,6 +78,11 @@ class KissDecoder(object):
 class PacketDemo():
 
 	# Buffer of data from STDIN to send to UART
+	#
+	# Note: we currently do not enforce a maximum size on this buffer.
+	#
+	# If you use this code in production, you definitely should set an upper limit,
+	# and also use a proper queue instead of shifting an array.
 	send_buf = bytearray()
 
 	# Maximum amount of data to read at once
