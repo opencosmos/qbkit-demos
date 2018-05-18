@@ -10,70 +10,8 @@ import select
 import json
 from serial import Serial
 
-# SLIP/KISS magic bytes
-FEND = 0xc0
-FESC = 0xdb
-TFEND = 0xdc
-TFESC = 0xdd
+import Kiss
 
-# SLIP/KISS encoder
-class KissEncoder(object):
-
-	def __init__(self):
-		None
-
-	def apply(self, data):
-		out = bytearray()
-		out.append(FEND)
-		for byte in data:
-			if byte == FEND:
-				out.append(FESC)
-				out.append(TFEND)
-			elif byte == FESC:
-				out.append(FESC)
-				out.append(TFENC)
-			else:
-				out.append(byte)
-		out.append(FEND)
-		return out
-
-# SLIP/KISS decoder
-class KissDecoder(object):
-
-	packet = None
-	escape = False
-	error = False
-
-	def __init__(self):
-		None
-
-	def apply(self, data):
-		packets = []
-		for byte in data:
-			if self.packet is not None:
-				if self.escape:
-					if byte == TFEND:
-						self.packet.add(FEND)
-					elif byte == TFESC:
-						self.packet.add(FESC)
-					else:
-						self.packet = None
-						self.escape = False
-						self.error = True
-					self.escape = False
-				elif byte == FESC:
-					self.escape = True
-				elif byte == FEND:
-					packets.append(self.packet)
-					self.packet = None
-				else:
-					self.packet.append(byte)
-			elif byte != FEND and not self.error:
-				self.packet = bytearray()
-				self.packet.append(byte)
-			elif byte == FEND:
-				self.error = False
-		return packets
 
 class PacketDemo():
 
@@ -89,8 +27,8 @@ class PacketDemo():
 	BUFSIZE = 0x10000
 
 	# Codec for packet access over character device
-	encoder = KissEncoder()
-	decoder = KissDecoder()
+	encoder = Kiss.Encoder()
+	decoder = Kiss.Decoder()
 
 	# Sequence number (added for educational use, not needed for demo)
 	seq = 1
@@ -185,7 +123,7 @@ class PacketDemo():
 				# If we have data buffered to send, also wait for UART to become writeable
 				want_write = [uart_fileno] if self.send_buf else []
 				# Wait for event
-				r, w, e = select.select([uart_fileno, stdin_fileno], [uart_fileno], [], 0)
+				r, w, e = select.select(want_read, want_write, [], 0)
 				# Error
 				if e:
 					print('Error occurred')
@@ -214,7 +152,7 @@ class PacketDemo():
 						# Decode JSON
 						msg = json.loads(str(packet, "utf-8"))
 						self.recv_json(msg)
-	
+
 	def send_json(self, msg):
 		''' Call to send a JSON packet '''
 		packet = bytes(json.dumps(msg), "utf-8")
