@@ -7,7 +7,6 @@ import sys
 import getopt
 import fcntl
 import select
-import json
 from serial import Serial
 import socket
 from asyncio import Queue
@@ -193,13 +192,13 @@ class Program():
 		print('')
 		print('Syntax:')
 		print('')
-		print('  ./packet.py')
-		print('              --device=/dev/ttyO1 --baud=9600')
-		print('              --server_host=localhost --server_port=5555')
-		print('              --client_host=localhost --client_port=5556')
-		print('              --ttl=2')
-		print('              --max_read_size=65536')
-		print('              --quiet')
+		print('  ./udp_bridge.py')
+		print('                  --device=/dev/ttyO1 --baud=9600')
+		print('                  --server_host=localhost --server_port=5555')
+		print('                  --client_host=localhost --client_port=5556')
+		print('                  --ttl=2')
+		print('                  --max_read_size=65536')
+		print('                  --quiet')
 		print('')
 		print('    --device=[value]         Path to serial device  ')
 		print('    --baud=[value]           Baud rate of serial link')
