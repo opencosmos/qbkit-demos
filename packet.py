@@ -10,7 +10,7 @@ import select
 import json
 from serial import Serial
 
-import Kiss
+import kiss
 
 
 class PacketDemo():
@@ -27,8 +27,8 @@ class PacketDemo():
 	BUFSIZE = 0x10000
 
 	# Codec for packet access over character device
-	encoder = Kiss.Encoder()
-	decoder = Kiss.Decoder()
+	encoder = kiss.Encoder()
+	decoder = kiss.Decoder()
 
 	# Sequence number (added for educational use, not needed for demo)
 	seq = 1

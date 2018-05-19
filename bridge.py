@@ -12,7 +12,7 @@ from serial import Serial
 import socket
 from asyncio import Queue
 
-import Kiss
+import kiss
 
 class Config():
 	''' Configuration for UART/UDP bridge '''
@@ -43,8 +43,8 @@ class Bridge():
 	next_uart_write = None
 
 	# Codec for packet access over character device
-	encoder = Kiss.Encoder()
-	decoder = Kiss.Decoder()
+	encoder = kiss.Encoder()
+	decoder = kiss.Decoder()
 
 	def __init__(self, config):
 		''' Main event loop '''
