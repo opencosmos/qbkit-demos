@@ -149,7 +149,7 @@ class Program():
 				'rx_host=', 'rx_port=',
 				'ttl=',
 				'max_read_size=',
-				'--quiet'])
+				'quiet'])
 
 			for opt, val in opts:
 				if opt in ('--device'):
