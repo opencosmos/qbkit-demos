@@ -16,7 +16,14 @@ class Config():
 
 class ExampleService():
 	def __init__(self):
-		None
+		self.commands = {
+			'ping': self.ping,
+			'echo': self.echo,
+			'upper': self.upper,
+			'lower': self.lower,
+			'date': self.date,
+			'help': self.help
+		}
 	def ping(self, *args):
 		return ['pong']
 	def echo(self, *args):
@@ -27,66 +34,71 @@ class ExampleService():
 		return [x.lower() for x in args]
 	def date(self, *args):
 		return [str(datetime.datetime.now())]
-	def commands(self):
-		return {
-				'ping': self.ping,
-				'echo': self.echo,
-				'upper': self.upper,
-				'lower': self.lower,
-				'date': self.date
-				}
+	def help(self, *args):
+		return ['Commands available: ' + ', '.join(self.commands.keys())]
 
 class Server():
 	example_msg = {
-		'command': 'command name',
 		'seq': 'sequence value, can be any type',
+		'command': 'command name',
 		'data': ['array', 'of', 'arguments']
 	}
+
 	def __init__(self, config, commands):
-		def list_commands():
-			return ['Commands available: ' + ', '.join(commands.keys())]
-		with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-			sock.bind((config.rx_host, config.rx_port))
-			while True:
-				packet, addr = sock.recvfrom(config.max_read_size)
-				try:
-					msg = json.loads(str(packet, "utf-8"))
-				except json.decoder.JSONDecodeError:
-					print('Invalid JSON received, ignoring')
-					continue
-				try:
-					command = msg['command']
-					if command == 'help':
-						func = list_commands
-					else:
-						func = commands[command]
-				except KeyError:
-					print('Invalid command')
-					continue
-				try:
-					seq = msg['seq']
-				except KeyError:
-					print('No sequence number specified')
-				req = None
-				try:
-					req = msg['data']
-				except KeyError:
-					print('No request data specified')
-				try:
-					if not config.quiet:
-						print('Executing command "' + command + '"')
-					res = func(*req)
-				except Exception as err:
-					res = ['ERROR:', 'An error occurred']
-					if not config.quiet:
-						print('Command failed:')
-						print(err)
-				msg = {
-					'command': command,
-					'seq': seq,
-					'data': res
-				}
-				sock.sendto(bytes(json.dumps(msg), "utf-8"), (config.tx_host, config.tx_port))
+		sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+		self.config = config
+		self.sock = sock
+		self.commands = commands
+		sock.bind((config.rx_host, config.rx_port))
+
+	def handle_request(self):
+		packet, addr = self.sock.recvfrom(self.config.max_read_size)
+		try:
+			msg = json.loads(str(packet, "utf-8"))
+		except json.decoder.JSONDecodeError:
+			print('Invalid JSON received, ignoring')
+			return
+		try:
+			command = msg['command']
+			func = self.commands[command]
+		except KeyError:
+			print('Invalid command')
+			return
+		try:
+			seq = msg['seq']
+		except KeyError:
+			print('No sequence number specified')
+			return
+		req = None
+		try:
+			req = msg['data']
+		except KeyError:
+			print('No request data specified')
+			return
+		try:
+			if not self.config.quiet:
+				print('Executing command "' + command + '"')
+			res = func(*req)
+		except Exception as err:
+			res = ['ERROR:', 'An error occurred']
+			if not self.config.quiet:
+				print('Command failed:')
+				print(err)
+			return
+		msg = {
+			'command': command,
+			'seq': seq,
+			'data': res
+		}
+		self.sock.sendto(bytes(json.dumps(msg), "utf-8"), (self.config.tx_host, self.config.tx_port))
+
+	def __enter__(self):
+		self.sock.__enter__()
+		return self
+
+	def __exit__(self, *args, **kwargs):
+		self.sock.__exit__(*args, **kwargs)
+		return self
 
 class Program():
 	def __init__(self, cmdline):
@@ -118,7 +130,13 @@ class Program():
 			print(err)
 			self.usage()
 			sys.exit(1)
-		Server(config, ExampleService().commands())
+		self.config = config
+
+	def run(self):
+		service = ExampleService()
+		server = Server(self.config, service.commands)
+		while True:
+			server.handle_request()
 
 	def usage(self):
 		print('Utility for handling requests over UDP.')
@@ -135,4 +153,4 @@ class Program():
 		print('')
 
 if __name__ == '__main__':
-	Program(sys.argv[1:])
+	Program(sys.argv[1:]).run()

@@ -15,30 +15,44 @@ class Config():
 	timeout = 1
 
 class Client():
+	sock = None
+	config = None
+	seq = 0
+
 	def __init__(self, config):
-		with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-			if config.timeout is not None:
-				sock.settimeout(config.timeout)
-			sock.bind((config.rx_host, config.rx_port))
-			seq = 0
-			while True:
-				args = input('$ ').split(' ')
-				if not args:
-					continue
-				command = args[0]
-				if command == 'quit':
-					break
-				cmdline = args[1:]
-				msg = {
-					'command': command,
-					'seq': seq,
-					'data': cmdline
-				}
-				seq = seq + 1
-				sock.sendto(bytes(json.dumps(msg), "utf-8"), (config.tx_host, config.tx_port))
-				packet, addr = sock.recvfrom(config.max_read_size)
-				msg = json.loads(str(packet, "utf-8"))
-				print(' '.join(msg['data']))
+		sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+		self.config = config
+		self.sock = sock
+		if config.timeout is not None:
+			sock.settimeout(config.timeout)
+		sock.bind((config.rx_host, config.rx_port))
+
+	def __enter__(self):
+		self.sock.__enter__()
+		return self
+
+	def __exit__(self, *args, **kwargs):
+		self.sock.__exit__(*args, **kwargs)
+		return self
+
+	def request(self, command, data, timeout=None):
+		if timeout is None:
+			timeout = self.config.timeout
+		seq = self.seq
+		self.seq = self.seq + 1
+		req = {
+			'seq': seq,
+			'command': command,
+			'data': data
+		}
+		self.sock.sendto(bytes(json.dumps(req), "utf-8"), (self.config.tx_host, self.config.tx_port))
+		packet, addr = self.sock.recvfrom(self.config.max_read_size)
+		res = json.loads(str(packet, "utf-8"))
+		if res['seq'] != seq:
+			raise AssertionError('Sequence number mismatch')
+		if res['command'] != command:
+			raise AssertionError('Command mismatch')
+		return res['data']
 
 class Program():
 	def __init__(self, cmdline):
@@ -70,7 +84,20 @@ class Program():
 			print(err)
 			self.usage()
 			sys.exit(1)
-		Client(config)
+		self.config = config
+
+	def run(self):
+		with Client(self.config) as client:
+			while True:
+				args = input('$ ').split(' ')
+				if not args:
+					continue
+				command = args[0]
+				if command == 'quit':
+					break
+				req = args[1:]
+				res = client.request(command, req)
+				print(' '.join(res))
 
 	def usage(self):
 		print('Utility for sending commands over UDP.')
@@ -86,4 +113,4 @@ class Program():
 		print('')
 
 if __name__ == '__main__':
-	Program(sys.argv[1:])
+	Program(sys.argv[1:]).run()
