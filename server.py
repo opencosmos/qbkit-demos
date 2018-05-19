@@ -12,6 +12,7 @@ class Config():
 	rx_host = 'localhost'
 	rx_port = 5556
 	max_read_size = 0x10000
+	quiet = False
 
 class ExampleService():
 	def __init__(self):
@@ -25,7 +26,7 @@ class ExampleService():
 	def lower(self, *args):
 		return [x.lower() for x in args]
 	def date(self, *args):
-		return str(datetime.datetime.now())
+		return [str(datetime.datetime.now())]
 	def commands(self):
 		return {
 				'ping': self.ping,
@@ -42,6 +43,8 @@ class Server():
 		'data': ['array', 'of', 'arguments']
 	}
 	def __init__(self, config, commands):
+		def list_commands():
+			return ['Commands available: ' + ', '.join(commands.keys())]
 		with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
 			sock.bind((config.rx_host, config.rx_port))
 			while True:
@@ -53,7 +56,10 @@ class Server():
 					continue
 				try:
 					command = msg['command']
-					func = commands[command]
+					if command == 'help':
+						func = list_commands
+					else:
+						func = commands[command]
 				except KeyError:
 					print('Invalid command')
 					continue
@@ -66,7 +72,15 @@ class Server():
 					req = msg['data']
 				except KeyError:
 					print('No request data specified')
-				res = func(*req)
+				try:
+					if not config.quiet:
+						print('Executing command "' + command + '"')
+					res = func(*req)
+				except Exception as err:
+					res = ['ERROR:', 'An error occurred']
+					if not config.quiet:
+						print('Command failed:')
+						print(err)
 				msg = {
 					'command': command,
 					'seq': seq,
@@ -79,7 +93,7 @@ class Program():
 		# Extract configuration from command line arguments
 		config = Config()
 		try:
-			opts, args = getopt.getopt(cmdline, '', ['tx_host=', 'tx_port=', 'rx_host=', 'rx_port=', 'max_read_size='])
+			opts, args = getopt.getopt(cmdline, '', ['tx_host=', 'tx_port=', 'rx_host=', 'rx_port=', 'max_read_size=', 'quiet'])
 
 			for opt, val in opts:
 				if opt in ('--tx_host'):
@@ -92,9 +106,11 @@ class Program():
 					config.rx_port = int(val)
 				elif opt in ('--max_read_size'):
 					config.max_read_size = int(val)
+				elif opt in ('--quiet'):
+					config.quiet = True
 				else:
 					raise AssertionError('Unhandled option: ' + opt)
-			if None in (config.tx_host, config.tx_port, config.rx_host, config.rx_port, config.max_read_size):
+			if None in (config.tx_host, config.tx_port, config.rx_host, config.rx_port, config.max_read_size, config.quiet):
 				raise AssertionError('Required parameter missing')
 			if args:
 				raise AssertionError('Unexpected trailing arguments')
@@ -115,6 +131,7 @@ class Program():
 		print('              --tx_host=localhost --tx_port=5555')
 		print('              --rx_host=localhost --rx_port=5556')
 		print('              --max_read_size=65536')
+		print('              --quiet')
 		print('')
 
 if __name__ == '__main__':
