@@ -164,7 +164,7 @@ class Program():
 					config.quiet = True
 				else:
 					raise AssertionError('Unhandled option: ' + opt)
-			if None in (config.device, config.baud, config.server_host, config.server_port, config.client_host, config.client_port, config.ttl):
+			if None in (config.device, config.baud, config.server_host, config.server_port, config.client_host, config.client_port, config.ttl, config.max_read_size):
 				raise AssertionError('Required parameter missing')
 			if args:
 				raise AssertionError('Unexpected trailing arguments')
