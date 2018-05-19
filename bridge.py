@@ -141,20 +141,28 @@ class Program():
 			sys.exit(1)
 		config = Config()
 		try:
-			opts, args = getopt.getopt(cmdline, '', ['device=', 'baud=', 'server_host=', 'server_port=', 'client_host=', 'client_port=', 'ttl=', 'max_read_size=', '--quiet'])
+			opts, args = getopt.getopt(cmdline, '', [
+				'device=', 'baud=',
+				'server_host=', 'server_port=',
+				'client_host=', 'client_port=',
+				'tx_host=', 'tx_port=',
+				'rx_host=', 'rx_port=',
+				'ttl=',
+				'max_read_size=',
+				'--quiet'])
 
 			for opt, val in opts:
 				if opt in ('--device'):
 					config.device = val
 				elif opt in ('--baud'):
 					config.baud = int(val)
-				elif opt in ('--server_host'):
+				elif opt in ('--server_host', '--tx_host'):
 					config.server_host = val
-				elif opt in ('--server_port'):
+				elif opt in ('--server_port', '--tx_port'):
 					config.server_port = int(val)
-				elif opt in ('--client_host'):
+				elif opt in ('--client_host', '--rx_host'):
 					config.client_host = val
-				elif opt in ('--client_port'):
+				elif opt in ('--client_port', '--rx_port'):
 					config.client_port = int(val)
 				elif opt in ('--ttl'):
 					config.ttl = int(val)
@@ -210,6 +218,8 @@ class Program():
 		print('  Set the client host/port to the server host/port to create an echo server')
 		print('')
 		print('  The --device argument is required.  All others will default to the values shown above, if omitted.')
+		print('')
+		print('    "client"/"server" may be replaced with "rx" and "tx respectively in the argument names, e.g. --server_port => --tx_port')
 		print('')
 
 if __name__ == '__main__':
