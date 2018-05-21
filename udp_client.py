@@ -5,6 +5,8 @@ import socket
 import getopt
 import json
 import datetime
+import time
+import secrets
 
 class Config():
 	tx_host = 'localhost'
@@ -12,19 +14,33 @@ class Config():
 	rx_host = 'localhost'
 	rx_port = 5556
 	max_read_size = 0x10000
+	topic = 'demo'
 	timeout = 1
+
+class UdpClientError(RuntimeError):
+	def __init__(self, msg):
+		self.message = msg
+
+class RequestTimeoutError(UdpClientError):
+	pass
+
+class InvalidResponseError(UdpClientError):
+	pass
+
+class OperationFailedError(UdpClientError):
+	pass
 
 class Client():
 	sock = None
 	config = None
+	seq_prefix = None
 	seq = 0
 
 	def __init__(self, config):
+		self.seq_prefix = secrets.token_urlsafe(22)
 		sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 		self.config = config
 		self.sock = sock
-		if config.timeout is not None:
-			sock.settimeout(config.timeout)
 		sock.bind((config.rx_host, config.rx_port))
 
 	def __enter__(self):
@@ -38,21 +54,43 @@ class Client():
 	def request(self, command, data, timeout=None):
 		if timeout is None:
 			timeout = self.config.timeout
+		self.sock.settimeout(self.config.timeout)
+		deadline = time.time() + float(timeout)
 		seq = self.seq
 		self.seq = self.seq + 1
+		seq_str = self.seq_prefix + str(seq)
 		req = {
-			'seq': seq,
+			'type': 'request',
+			'topic': self.config.topic,
+			'seq': seq_str,
 			'command': command,
 			'data': data
 		}
 		self.sock.sendto(bytes(json.dumps(req), "utf-8"), (self.config.tx_host, self.config.tx_port))
-		packet, addr = self.sock.recvfrom(self.config.max_read_size)
-		res = json.loads(str(packet, "utf-8"))
-		if res['seq'] != seq:
-			raise AssertionError('Sequence number mismatch')
-		if res['command'] != command:
-			raise AssertionError('Command mismatch')
-		return res['data']
+		do_while = True
+		while do_while or time.time() < deadline:
+			do_while = False
+			try:
+				packet, addr = self.sock.recvfrom(self.config.max_read_size)
+			except socket.timeout:
+				break
+			res = json.loads(str(packet, "utf-8"))
+			if res.get('type') != 'response':
+				continue
+			if res.get('topic') != self.config.topic:
+				continue
+			if res.get('seq') != seq_str:
+				continue
+			if res.get('command') != command:
+				raise InvalidResponseError('Command mismatch')
+			err = res.get('error')
+			if err:
+				raise OperationFailedError(err)
+			data = res.get('data')
+			if data is None:
+				raise InvalidResponseError('No data in response')
+			return data
+		raise RequestTimeoutError('Timed out while waiting for response')
 
 class Program():
 	def __init__(self, cmdline):
@@ -72,11 +110,13 @@ class Program():
 					config.rx_port = int(val)
 				elif opt in ('--max_read_size'):
 					config.max_read_size = int(val)
+				elif opt in ('--topic'):
+					config.topic = val
 				elif opt in ('--timeout'):
 					config.timeout = float(val)
 				else:
 					raise AssertionError('Unhandled option: ' + opt)
-			if None in (config.tx_host, config.tx_port, config.rx_host, config.rx_port, config.max_read_size, config.timeout):
+			if None in (config.tx_host, config.tx_port, config.rx_host, config.rx_port, config.max_read_size, config.topic, config.timeout):
 				raise AssertionError('Required parameter missing')
 			if args:
 				raise AssertionError('Unexpected trailing arguments')
@@ -89,15 +129,28 @@ class Program():
 	def run(self):
 		with Client(self.config) as client:
 			while True:
-				args = input('$ ').split(' ')
-				if not args:
-					continue
+				cmdline = input('$ ').strip()
+				if not cmdline or cmdline[0] == '#':
+					continue;
+				args = cmdline.split(' ')
 				command = args[0]
-				if command == 'quit':
-					break
 				req = args[1:]
-				res = client.request(command, req)
-				print(' '.join(res))
+				try:
+					res = client.request(command, req)
+					print(res)
+				except InvalidResponseError as err:
+					print('(Received invalid response from server: ' + err.message + ')')
+					print('')
+				except OperationFailedError as err:
+					print('(Operation failed: ' + err.message + ')')
+					print('')
+				except RequestTimeoutError as err:
+					print('(Timed out while waiting for response)')
+					print('')
+				except BaseException as err:
+					print('Unexpected exception:')
+					print(str(err))
+					break
 
 	def usage(self):
 		print('Utility for sending commands over UDP.')
@@ -109,6 +162,7 @@ class Program():
 		print('  ./udp_client.py')
 		print('                  --tx_host=localhost --tx_port=5555')
 		print('                  --rx_host=localhost --rx_port=5556')
+		print('                  --topic=demo')
 		print('                  --max_read_size=65536')
 		print('')
 
