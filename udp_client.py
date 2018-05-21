@@ -59,9 +59,10 @@ class Client():
 		seq = self.seq
 		self.seq = self.seq + 1
 		seq_str = self.seq_prefix + str(seq)
+		topic = self.config.topic
 		req = {
 			'type': 'request',
-			'topic': self.config.topic,
+			'topic': topic,
 			'seq': seq_str,
 			'command': command,
 			'data': data
@@ -77,7 +78,7 @@ class Client():
 			res = json.loads(str(packet, "utf-8"))
 			if res.get('type') != 'response':
 				continue
-			if res.get('topic') != self.config.topic:
+			if res.get('topic') != topic:
 				continue
 			if res.get('seq') != seq_str:
 				continue
@@ -138,8 +139,21 @@ class Program():
 				command = args[0]
 				req = args[1:]
 				try:
-					res = client.request(command, req)
-					print(res)
+					if command == 'topic':
+						if len(req) == 0:
+							print('(Topic is "' + self.config.topic + '")')
+						elif len(req) == 1:
+							self.config.topic = req[0]
+						else:
+							print('(Syntax error: topic [<topic-name>])')
+					elif command == 'quit':
+						print('(Quitting)')
+						break
+					else:
+						res = client.request(command, req)
+						print(res)
+					if command == 'help':
+						print('(Extra client-side commands: topic, quit)')
 				except InvalidResponseError as err:
 					print('(Received invalid response from server: ' + err.message + ')')
 					print('')
