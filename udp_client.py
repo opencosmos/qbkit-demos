@@ -141,7 +141,11 @@ class Program():
 				cmdline = input('$ ').strip()
 				if not cmdline or cmdline[0] == '#':
 					continue;
-				command, req = cmdline.split(' ', 1)
+				try:
+					command, req = cmdline.split(' ', 1)
+				except ValueError:
+					command = cmdline
+					req = "{}"
 				try:
 					if command == 'topic':
 						if len(req) == 0:
