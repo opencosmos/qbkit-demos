@@ -54,6 +54,7 @@ class Client():
 	def request(self, command, data, timeout=None):
 		if timeout is None:
 			timeout = self.config.timeout
+		timeout = float(timeout)
 		self.sock.settimeout(self.config.timeout)
 		deadline = time.time() + float(timeout)
 		client = self.client
@@ -73,6 +74,8 @@ class Client():
 		while do_while or time.time() < deadline:
 			do_while = False
 			try:
+				timeout = max(deadline - time.time(), 0)
+				self.sock.settimeout(timeout)
 				packet, addr = self.sock.recvfrom(self.config.max_read_size)
 			except socket.timeout:
 				break

@@ -16,11 +16,6 @@ class Config():
 	quiet = False
 
 class Server():
-	example_msg = {
-		'seq': 'sequence value, can be any type',
-		'command': 'command name',
-		'data': ['array', 'of', 'arguments']
-	}
 
 	def __init__(self, config, commands):
 		sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -29,7 +24,19 @@ class Server():
 		self.commands = commands
 		sock.bind((config.rx_host, config.rx_port))
 
-	def handle_request(self):
+	def handle_request(self, timeout = None):
+		if timeout is None:
+			self.sock.settimeout(None)
+			return self.try_handle_request()
+		else:
+			deadline = time.time() + float(timeout)
+			while time.time() < deadline:
+				timeout = max(deadline - time.time(), 0)
+				self.sock.settimeout(self.config.timeout)
+				if self.try_handle_request():
+					break
+
+	def try_handle_request(self):
 		packet, addr = self.sock.recvfrom(self.config.max_read_size)
 		# Deserialise
 		try:
@@ -37,24 +44,24 @@ class Server():
 		except json.decoder.JSONDecodeError:
 			if not self.config.quiet:
 				print('Invalid JSON received, ignoring')
-			return
+			return False
 		# Check type (request/response/?)
 		type = msg.get('type')
 		if type != 'request':
 			if not self.config.quiet:
 				print('Message receieved for a different communication type')
-			return
+			return False
 		# Check topic
 		topic = msg.get('topic')
 		if topic != self.config.topic:
 			if not self.config.quiet:
 				print('Message receieved for a different topic, ignoring')
-			return
+			return False
 		# Get command
 		command = msg.get('command')
 		if command is None:
 			print('Error: No command specified')
-			return
+			return False
 		# Get sequence value
 		seq = msg.get('seq')
 		if seq is None:
@@ -67,7 +74,7 @@ class Server():
 		func = self.commands.get(command)
 		if func is None:
 			self.send_error(client, topic, command, seq, 'Unrecognised command')
-			return
+			return False
 		# Get command parameters
 		req = msg.get('data')
 		if not self.config.quiet:
@@ -79,7 +86,7 @@ class Server():
 			self.send_error(client, topic, command, seq, 'Command failed')
 			if not self.config.quiet:
 				print(err)
-			return
+			return False
 		# Respond
 		msg = {
 			'type': 'response',
@@ -90,6 +97,7 @@ class Server():
 			'data': res
 		}
 		self.sock.sendto(bytes(json.dumps(msg), "utf-8"), (self.config.tx_host, self.config.tx_port))
+		return True
 
 	def send_error(self, client, topic, command, seq, error):
 		print('Error: ' + str(error));
@@ -110,6 +118,42 @@ class Server():
 	def __exit__(self, *args, **kwargs):
 		self.sock.__exit__(*args, **kwargs)
 		return self
+
+def parse_config(cmdline, initial=None):
+	# Extract configuration from command line arguments, return remaining arguments
+	if initial is None:
+		config = Config()
+	else:
+		config = initial
+	opts, args = getopt.getopt(cmdline, '', ['tx_host=', 'tx_port=', 'rx_host=', 'rx_port=', 'max_read_size=', 'topic=', 'quiet'])
+	for opt, val in opts:
+		if opt in ('--tx_host'):
+			config.tx_host = val
+		elif opt in ('--tx_port'):
+			config.tx_port = int(val)
+		elif opt in ('--rx_host'):
+			config.rx_host = val
+		elif opt in ('--rx_port'):
+			config.rx_port = int(val)
+		elif opt in ('--max_read_size'):
+			config.max_read_size = int(val, 0)
+		elif opt in ('--topic'):
+			config.topic = val
+		elif opt in ('--quiet'):
+			config.quiet = True
+		else:
+			raise AssertionError('Unhandled option: ' + opt)
+	if None in (config.tx_host, config.tx_port, config.rx_host, config.rx_port, config.max_read_size, config.topic, config.quiet):
+		raise AssertionError('Required parameter missing')
+	return (config, args)
+
+def show_usage():
+	print('                  --tx_host=' + config.tx_host + ' --tx_port=' + int(config.tx_port))
+	print('                  --rx_host=' + config.rx_host + ' --rx_port=' + int(config.rx_port))
+	print('                  --topic=' + config.topic)
+	print('                  --max_read_size=' + hex(config.max_read_size))
+	print('                  --quiet')
+	print('')
 
 #################### DEMO / CLI STUFF COMES BELOW ####################
 
@@ -138,33 +182,11 @@ class ExampleService():
 
 class Program():
 	def __init__(self, cmdline):
-		# Extract configuration from command line arguments
-		config = Config()
 		try:
-			opts, args = getopt.getopt(cmdline, '', ['tx_host=', 'tx_port=', 'rx_host=', 'rx_port=', 'max_read_size=', 'topic=', 'quiet'])
-
-			for opt, val in opts:
-				if opt in ('--tx_host'):
-					config.tx_host = val
-				elif opt in ('--tx_port'):
-					config.tx_port = int(val)
-				elif opt in ('--rx_host'):
-					config.rx_host = val
-				elif opt in ('--rx_port'):
-					config.rx_port = int(val)
-				elif opt in ('--max_read_size'):
-					config.max_read_size = int(val)
-				elif opt in ('--topic'):
-					config.topic = val
-				elif opt in ('--quiet'):
-					config.quiet = True
-				else:
-					raise AssertionError('Unhandled option: ' + opt)
-			if None in (config.tx_host, config.tx_port, config.rx_host, config.rx_port, config.max_read_size, config.topic, config.quiet):
-				raise AssertionError('Required parameter missing')
+			config, args = parse_config(cmdline)
 			if args:
 				raise AssertionError('Unexpected trailing arguments')
-		except (getopt.GetoptError, ValueError) as err:
+		except (getopt.GetoptError, ValueError, AssertionError) as err:
 			print(err)
 			self.usage()
 			sys.exit(1)
@@ -184,12 +206,7 @@ class Program():
 		print('Syntax:')
 		print('')
 		print('  ./udp_server.py')
-		print('                  --tx_host=localhost --tx_port=5555')
-		print('                  --rx_host=localhost --rx_port=5556')
-		print('                  --topic=demo')
-		print('                  --max_read_size=65536')
-		print('                  --quiet')
-		print('')
+		show_usage()
 
 if __name__ == '__main__':
 	Program(sys.argv[1:]).run()
