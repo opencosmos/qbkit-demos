@@ -42,7 +42,7 @@ class FileCache():
 			entry = FileCacheEntry(value, self.timeout)
 			self.files[key] = entry
 
-	def close(self, client, name, value):
+	def close(self, client, name):
 		self._set((client, name), None)
 
 	def open(self, client, name, path):
@@ -114,7 +114,7 @@ class FileSystemService():
 			}
 		self.switch_to_client(client)
 		cwd = os.getcwd()
-		files = [key[1] for key in self.file_cache.keys() if key[0] == client]
+		files = [key[1] for key in self.file_cache.files.keys() if key[0] == client]
 		return {
 			'path': cwd,
 			'files': files
@@ -128,7 +128,7 @@ class FileSystemService():
 		self.switch_to_client(client)
 		os.chdir(data['path'])
 		self.cwds[client] = os.getcwd()
-		return self.getcwd(data, client)
+		return self.here(data, client)
 
 	def list(self, data, client):
 		if data == 'help':
@@ -143,7 +143,7 @@ class FileSystemService():
 			rx = re.compile(filter)
 			filter = lambda x: rx.fullmatch(x)
 		return {
-			'list': [item for item in os.listdir(data['path']) if filter(item)]
+			'list': [item for item in os.listdir(data.get('path')) if filter(item)]
 		}
 
 	def open(self, data, client):
