@@ -106,10 +106,10 @@ class Program():
 		print('')
 		print('Syntax:')
 		print('')
-		print('  ./client.py')
-		print('              --tx_host=localhost --tx_port=5555')
-		print('              --rx_host=localhost --rx_port=5556')
-		print('              --max_read_size=65536')
+		print('  ./udp_client.py')
+		print('                  --tx_host=localhost --tx_port=5555')
+		print('                  --rx_host=localhost --rx_port=5556')
+		print('                  --max_read_size=65536')
 		print('')
 
 if __name__ == '__main__':

@@ -145,11 +145,11 @@ class Program():
 		print('')
 		print('Syntax:')
 		print('')
-		print('  ./server.py')
-		print('              --tx_host=localhost --tx_port=5555')
-		print('              --rx_host=localhost --rx_port=5556')
-		print('              --max_read_size=65536')
-		print('              --quiet')
+		print('  ./udp_server.py')
+		print('                  --tx_host=localhost --tx_port=5555')
+		print('                  --rx_host=localhost --rx_port=5556')
+		print('                  --max_read_size=65536')
+		print('                  --quiet')
 		print('')
 
 if __name__ == '__main__':
