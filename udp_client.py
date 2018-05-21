@@ -33,11 +33,11 @@ class OperationFailedError(UdpClientError):
 class Client():
 	sock = None
 	config = None
-	seq_prefix = None
+	client = None
 	seq = 0
 
 	def __init__(self, config):
-		self.seq_prefix = secrets.token_urlsafe(22)
+		self.client = secrets.token_urlsafe(10)
 		sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 		self.config = config
 		self.sock = sock
@@ -56,14 +56,15 @@ class Client():
 			timeout = self.config.timeout
 		self.sock.settimeout(self.config.timeout)
 		deadline = time.time() + float(timeout)
+		client = self.client
 		seq = self.seq
 		self.seq = self.seq + 1
-		seq_str = self.seq_prefix + str(seq)
 		topic = self.config.topic
 		req = {
 			'type': 'request',
+			'client': client,
 			'topic': topic,
-			'seq': seq_str,
+			'seq': seq,
 			'command': command,
 			'data': data
 		}
@@ -78,9 +79,11 @@ class Client():
 			res = json.loads(str(packet, "utf-8"))
 			if res.get('type') != 'response':
 				continue
+			if res.get('client') != client:
+				continue
 			if res.get('topic') != topic:
 				continue
-			if res.get('seq') != seq_str:
+			if res.get('seq') != seq:
 				continue
 			if res.get('command') != command:
 				raise InvalidResponseError('Command mismatch')

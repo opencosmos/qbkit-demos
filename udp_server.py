@@ -59,10 +59,14 @@ class Server():
 		seq = msg.get('seq')
 		if seq is None:
 			print('Warning: No sequence value provided')
+		# Get sequence value
+		client = msg.get('client')
+		if client is None:
+			print('Warning: No client ID provided')
 		# Get function for handling this command
 		func = self.commands.get(command)
 		if func is None:
-			self.send_error(topic, command, seq, 'Unrecognised command')
+			self.send_error(client, topic, command, seq, 'Unrecognised command')
 			return
 		# Get command parameters
 		req = msg.get('data')
@@ -72,13 +76,14 @@ class Server():
 		try:
 			res = func(req)
 		except BaseException as err:
-			self.send_error(topic, command, seq, 'Command failed')
+			self.send_error(client, topic, command, seq, 'Command failed')
 			if not self.config.quiet:
 				print(err)
 			return
 		# Respond
 		msg = {
 			'type': 'response',
+			'client': client,
 			'topic': topic,
 			'command': command,
 			'seq': seq,
@@ -86,10 +91,11 @@ class Server():
 		}
 		self.sock.sendto(bytes(json.dumps(msg), "utf-8"), (self.config.tx_host, self.config.tx_port))
 
-	def send_error(self, topic, command, seq, error):
+	def send_error(self, client, topic, command, seq, error):
 		print('Error: ' + str(error));
 		msg = {
 			'type': 'response',
+			'client': client,
 			'topic': topic,
 			'command': command,
 			'seq': seq,
