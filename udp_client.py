@@ -92,6 +92,8 @@ class Client():
 			return data
 		raise RequestTimeoutError('Timed out while waiting for response')
 
+#################### DEMO / CLI STUFF COMES BELOW ####################
+
 class Program():
 	def __init__(self, cmdline):
 		# Extract configuration from command line arguments

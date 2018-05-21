@@ -131,6 +131,8 @@ class Bridge():
 		packet = self.recv_buf.get_nowait()
 		self.sock.sendto(packet, (self.config.client_host, self.config.client_port))
 
+#################### DEMO / CLI STUFF COMES BELOW ####################
+
 class Program():
 	''' Wrapper to allow bridge to be invoked from command-line '''
 	def __init__(self, cmdline):
@@ -218,7 +220,8 @@ class Program():
 		print('')
 		print('  The --device argument is required.  All others will default to the values shown above, if omitted.')
 		print('')
-		print('    "client"/"server" may be replaced with "rx" and "tx respectively in the argument names, e.g. --server_port => --tx_port')
+		print('  "client"/"server" may be replaced with "rx" and "tx respectively in the argument names, e.g. --server_port => --tx_port')
+		print('  This is provided for consistency with the client and server programs.')
 		print('')
 
 if __name__ == '__main__':

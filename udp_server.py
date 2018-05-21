@@ -96,7 +96,7 @@ class Server():
 			'error': error
 		}
 		self.sock.sendto(bytes(json.dumps(msg), "utf-8"), (self.config.tx_host, self.config.tx_port))
-	
+
 	def __enter__(self):
 		self.sock.__enter__()
 		return self
@@ -104,6 +104,8 @@ class Server():
 	def __exit__(self, *args, **kwargs):
 		self.sock.__exit__(*args, **kwargs)
 		return self
+
+#################### DEMO / CLI STUFF COMES BELOW ####################
 
 class ExampleService():
 	def __init__(self):
