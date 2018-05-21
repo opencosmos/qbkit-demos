@@ -4,16 +4,23 @@ import sys
 import socket
 import getopt
 import json
+import time
 import datetime
+import traceback
 
-class Config():
-	tx_host = 'localhost'
-	tx_port = 5555
-	rx_host = 'localhost'
-	rx_port = 5556
-	topic = 'demo'
-	max_read_size = 0x10000
-	quiet = False
+class Config(object):
+	def __init__(self):
+		self.tx_host = 'localhost'
+		self.tx_port = 5555
+		self.rx_host = 'localhost'
+		self.rx_port = 5556
+		self.topic = 'demo'
+		self.max_read_size = 0x10000
+		self.quiet = False
+
+class RejectRequest(BaseException):
+	def __init__(self, message):
+		self.message = message
 
 class Server():
 
@@ -32,12 +39,15 @@ class Server():
 			deadline = time.time() + float(timeout)
 			while time.time() < deadline:
 				timeout = max(deadline - time.time(), 0)
-				self.sock.settimeout(self.config.timeout)
+				self.sock.settimeout(timeout)
 				if self.try_handle_request():
 					break
 
 	def try_handle_request(self):
-		packet, addr = self.sock.recvfrom(self.config.max_read_size)
+		try:
+			packet, addr = self.sock.recvfrom(self.config.max_read_size)
+		except socket.timeout:
+			return False
 		# Deserialise
 		try:
 			msg = json.loads(str(packet, "utf-8"))
@@ -82,11 +92,17 @@ class Server():
 		# Execute
 		try:
 			res = func(req, client)
-		except BaseException as err:
-			self.send_error(client, topic, command, seq, 'Command failed')
+		except RejectRequest as err:
+			self.send_error(client, topic, command, seq, err.message)
 			if not self.config.quiet:
 				print(err)
-			return False
+			return True
+		except BaseException as err:
+			self.send_error(client, topic, command, seq, 'Command failed')
+			print('')
+			traceback.print_exc()
+			print('')
+			return True
 		# Respond
 		msg = {
 			'type': 'response',
@@ -147,9 +163,9 @@ def parse_config(cmdline, initial=None):
 		raise AssertionError('Required parameter missing')
 	return (config, args)
 
-def show_usage():
-	print('                  --tx_host=' + config.tx_host + ' --tx_port=' + int(config.tx_port))
-	print('                  --rx_host=' + config.rx_host + ' --rx_port=' + int(config.rx_port))
+def show_usage(config=Config()):
+	print('                  --tx_host=' + str(config.tx_host) + ' --tx_port=' + str(config.tx_port))
+	print('                  --rx_host=' + str(config.rx_host) + ' --rx_port=' + str(config.rx_port))
 	print('                  --topic=' + config.topic)
 	print('                  --max_read_size=' + hex(config.max_read_size))
 	print('                  --quiet')
@@ -170,11 +186,11 @@ class ExampleService():
 	def ping(self, data, client):
 		return 'pong'
 	def echo(self, data, client):
-		return ' '.join(data)
+		return str(data)
 	def upper(self, data, client):
-		return ' '.join([x.upper() for x in data])
+		return str(data).upper()
 	def lower(self, data, client):
-		return ' '.join([x.lower() for x in data])
+		return str(data).lower()
 	def date(self, data, client):
 		return str(datetime.datetime.now())
 	def help(self, data, client):
@@ -182,14 +198,12 @@ class ExampleService():
 
 class Program():
 	def __init__(self, cmdline):
-		try:
-			config, args = parse_config(cmdline)
-			if args:
-				raise AssertionError('Unexpected trailing arguments')
-		except (getopt.GetoptError, ValueError, AssertionError) as err:
-			print(err)
+		if cmdline == ['--help']:
 			self.usage()
-			sys.exit(1)
+			sys.exit(0)
+		config, args = parse_config(cmdline)
+		if args:
+			raise AssertionError('Unexpected trailing arguments')
 		self.config = config
 
 	def run(self):

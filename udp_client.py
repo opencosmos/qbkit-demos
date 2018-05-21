@@ -141,22 +141,18 @@ class Program():
 				cmdline = input('$ ').strip()
 				if not cmdline or cmdline[0] == '#':
 					continue;
-				args = cmdline.split(' ')
-				command = args[0]
-				req = args[1:]
+				command, req = cmdline.split(' ', 1)
 				try:
 					if command == 'topic':
 						if len(req) == 0:
 							print('(Topic is "' + self.config.topic + '")')
-						elif len(req) == 1:
-							self.config.topic = req[0]
 						else:
-							print('(Syntax error: topic [<topic-name>])')
+							self.config.topic = req
 					elif command == 'quit':
 						print('(Quitting)')
 						break
 					else:
-						res = client.request(command, req)
+						res = client.request(command, json.loads(req))
 						print(res)
 					if command == 'help':
 						print('(Extra client-side commands: topic, quit)')
@@ -182,10 +178,10 @@ class Program():
 		print('Syntax:')
 		print('')
 		print('  ./udp_client.py')
-		print('                  --tx_host=localhost --tx_port=5555')
-		print('                  --rx_host=localhost --rx_port=5556')
-		print('                  --topic=demo')
-		print('                  --max_read_size=65536')
+		print('                  --tx_host=' + config.tx_host + ' --tx_port=' + int(config.tx_port))
+		print('                  --rx_host=' + config.rx_host + ' --rx_port=' + int(config.rx_port))
+		print('                  --topic=' + config.topic)
+		print('                  --max_read_size=' + hex(config.max_read_size))
 		print('')
 
 if __name__ == '__main__':
