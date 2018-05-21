@@ -81,7 +81,7 @@ class Server():
 			print('Info: Executing command "' + command + '"')
 		# Execute
 		try:
-			res = func(req)
+			res = func(req, client)
 		except BaseException as err:
 			self.send_error(client, topic, command, seq, 'Command failed')
 			if not self.config.quiet:
@@ -167,17 +167,17 @@ class ExampleService():
 			'date': self.date,
 			'help': self.help
 		}
-	def ping(self, data):
+	def ping(self, data, client):
 		return 'pong'
-	def echo(self, data):
+	def echo(self, data, client):
 		return ' '.join(data)
-	def upper(self, data):
+	def upper(self, data, client):
 		return ' '.join([x.upper() for x in data])
-	def lower(self, data):
+	def lower(self, data, client):
 		return ' '.join([x.lower() for x in data])
-	def date(self, data):
+	def date(self, data, client):
 		return str(datetime.datetime.now())
-	def help(self, data):
+	def help(self, data, client):
 		return 'Commands available: ' + ', '.join(self.commands.keys())
 
 class Program():
