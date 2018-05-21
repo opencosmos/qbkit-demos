@@ -69,12 +69,12 @@ class Bridge():
 				want_read.append(sock_fileno)
 				# If we have data buffered to send, also wait for UART to become writeable
 				want_write = []
-				if not self.send_buf.empty():
+				if not self.send_buf.empty() or self.next_uart_write is not None:
 					want_write.append(uart_fileno)
 				if not self.recv_buf.empty():
 					want_write.append(sock_fileno)
 				# Wait for event
-				r, w, e = select.select(want_read, want_write, [], 0)
+				r, w, e = select.select(want_read, want_write, [])
 				# Error
 				if e:
 					print('Error occurred')
