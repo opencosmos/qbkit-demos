@@ -19,7 +19,7 @@ class Encoder(object):
 				out.append(TFEND)
 			elif byte == FESC:
 				out.append(FESC)
-				out.append(TFENC)
+				out.append(TFESC)
 			else:
 				out.append(byte)
 		out.append(FEND)
