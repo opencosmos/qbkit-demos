@@ -7,8 +7,10 @@ src := $(filter-out main_%.cpp, $(wildcard *.cpp))
 obj := $(src:%.cpp=$(tmp)%.oxx)
 out := $(progs:%=$(bin)%)
 
-CXXFLAGS := -Wall -Wextra -Werror -O0 -g -std=gnu++17 -ffunction-sections -fdata-sections
-LDFLAGS := -Wall -Wextra -Werror -O0 -g -Wl,--gc-sections
+O ?= 0
+
+CXXFLAGS := -Wall -Wextra -Werror -O$(O) -g -std=gnu++17 -ffunction-sections -fdata-sections
+LDFLAGS := -Wall -Wextra -Werror -O$(O) -g -Wl,--gc-sections
 libs := pthread zmq
 
 CXX := clang++
