@@ -13,7 +13,6 @@
 
 #include "Kiss.hpp"
 #include "Serial.hpp"
-#include "Cork.hpp"
 #include "GeneratorIterator.hpp"
 #include "SignalReceiver.hpp"
 
@@ -100,6 +99,7 @@ BridgeTask::BridgeTask(const Config& config) :
 		.events = 0,
 		.revents = 0
 	};
+	sr.set_mask();
 }
 
 void BridgeTask::run()
