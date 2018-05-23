@@ -1,7 +1,7 @@
 bin := bin/
 tmp := build/
 
-progs := bridge chat
+progs := $(patsubst main_%.cpp, %, $(wildcard main_*.cpp))
 
 src := $(filter-out main_%.cpp, $(wildcard *.cpp))
 obj := $(src:%.cpp=$(tmp)%.oxx)

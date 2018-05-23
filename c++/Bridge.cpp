@@ -4,17 +4,17 @@
 #include <thread>
 #include <vector>
 #include <deque>
+#include <optional>
 
-#include <signal.h>
-#include <sys/poll.h>
-#include <sys/signalfd.h>
+#include <fcntl.h>
 
 #include <zmq.hpp>
 
 #include "Kiss.hpp"
 #include "Serial.hpp"
 #include "GeneratorIterator.hpp"
-#include "SignalReceiver.hpp"
+#include "SystemError.hpp"
+#include "Task.hpp"
 
 #include "Bridge.hpp"
 
@@ -22,12 +22,13 @@ namespace Bridge {
 
 static constexpr std::size_t CHUNK_SIZE = 0x10000;
 
-class BridgeTask
+static constexpr std::uint8_t FLAG_MORE = 0x01;
+
+class Task :
+	public Util::Task
 {
 	Config config;
-	Posix::SignalReceiver sr;
-	Posix::Serial serial;
-	zmq::context_t context;
+	std::optional<Posix::Serial> serial;
 	zmq::socket_t pub;
 	zmq::socket_t sub;
 	Kiss::Encoder encoder;
@@ -36,34 +37,36 @@ class BridgeTask
 	std::deque<std::uint8_t> uart_tx_buf;
 	std::vector<std::uint8_t> chunk;
 
-	bool exit;
+	const int pfd_pub;
+	const int pfd_sub;
+	const int pfd_serial;
 
-	enum pfds {
-		pfd_signal = 0,
-		pfd_serial = 1,
-		pfd_pub_socket = 2,
-		pfd_sub_socket = 3,
-		pfd_count = 4
-	};
-	zmq_pollitem_t pfds[pfd_count];
-
-	void signal_read();
 	void serial_read();
 	void serial_write();
 	void pub_socket_write();
 	void sub_socket_read();
-	void run();
+
+protected:
+	virtual void set_events() override;
+	virtual void handle_events() override;
 
 public:
-	BridgeTask(const Config& config);
-	void run_loop();
+	Task(const Config& config, zmq::context_t& context);
 };
 
-BridgeTask::BridgeTask(const Config& config) :
+static std::optional<Posix::Serial> make_serial(const std::string& device, int baud)
+{
+	if (device.empty()) {
+		return std::nullopt;
+	} else {
+		return std::make_optional<Posix::Serial>(Posix::File(device, O_RDWR), baud);
+	}
+}
+
+Task::Task(const Config& config, zmq::context_t& context) :
+	Util::Task(context, "bridge", config.verbose),
 	config(config),
-	sr(SIGUSR1, SIGINT, SIGTERM, SIGQUIT),
-	serial({ config.device, O_RDWR }, config.baud),
-	context(4),
+	serial(make_serial(config.device, config.baud)),
 	pub(context, ZMQ_PUB),
 	sub(context, ZMQ_SUB),
 	encoder(),
@@ -71,125 +74,109 @@ BridgeTask::BridgeTask(const Config& config) :
 	uart_rx_buf(),
 	uart_tx_buf(),
 	chunk(CHUNK_SIZE),
-	exit(false)
+	pfd_pub(bind(pub)),
+	pfd_sub(bind(sub)),
+	pfd_serial(bind(serial ? serial->fileno() : -1))
 {
+	/* Configure sockets */
+	pub.setsockopt(ZMQ_LINGER, 0);
+	sub.setsockopt(ZMQ_LINGER, 0);
+
 	pub.bind(config.rx_url);
 	sub.bind(config.tx_url);
-	pfds[pfd_signal] = {
-		.socket = nullptr,
-		.fd = sr.fileno(),
-		.events = 0,
-		.revents = 0
-	};
-	pfds[pfd_serial] = {
-		.socket = nullptr,
-		.fd = serial.fileno(),
-		.events = 0,
-		.revents = 0
-	};
-	pfds[pfd_pub_socket] = {
-		.socket = &pub,
-		.fd = -1,
-		.events = 0,
-		.revents = 0
-	};
-	pfds[pfd_sub_socket] = {
-		.socket = &sub,
-		.fd = -1,
-		.events = 0,
-		.revents = 0
-	};
-	sr.set_mask();
+
+	sub.setsockopt(ZMQ_SUBSCRIBE, "", 0);
 }
 
-void BridgeTask::run()
+void Task::set_events()
 {
-	pfds[pfd_signal].events = ZMQ_POLLIN;
-	pfds[pfd_serial].events = ZMQ_POLLIN | ZMQ_POLLOUT;
-	pfds[pfd_pub_socket].events = ZMQ_POLLOUT;
-	pfds[pfd_sub_socket].events = ZMQ_POLLIN;
-	if (zmq_poll(pfds, pfd_count, -1) == -1) {
-		throw Posix::io_error("zmq_poll failed");
-	}
-	if (pfds[pfd_signal].revents & ZMQ_POLLERR) {
-		throw Posix::io_error("zmq_poll failed on signal handler");
-	}
-	if (pfds[pfd_serial].revents & ZMQ_POLLERR) {
-		throw Posix::io_error("zmq_poll failed on serial port");
-	}
-	if (pfds[pfd_signal].revents & ZMQ_POLLIN) {
-		signal_read();
-	}
-	if (pfds[pfd_sub_socket].revents & ZMQ_POLLIN) {
+	get_pfd(pfd_serial).events = serial ? ZMQ_POLLIN | (uart_tx_buf.empty() ? 0 : ZMQ_POLLOUT) : 0;
+	get_pfd(pfd_pub).events = uart_rx_buf.empty() ? 0 : ZMQ_POLLOUT;
+	get_pfd(pfd_sub).events = ZMQ_POLLIN;
+}
+
+void Task::handle_events()
+{
+	if (get_pfd(pfd_sub).revents & ZMQ_POLLIN) {
 		sub_socket_read();
 	}
-	if (pfds[pfd_serial].revents & ZMQ_POLLOUT) {
+	if (get_pfd(pfd_serial).revents & ZMQ_POLLOUT) {
 		serial_write();
 	}
-	if (pfds[pfd_serial].revents & ZMQ_POLLIN) {
+	if (!serial) {
+		std::copy(uart_tx_buf.cbegin(), uart_tx_buf.cend(), std::back_inserter(uart_rx_buf));
+		uart_tx_buf.clear();
+	}
+	if (get_pfd(pfd_serial).revents & ZMQ_POLLIN) {
 		serial_read();
 	}
-	if (pfds[pfd_pub_socket].revents & ZMQ_POLLOUT) {
+	if (get_pfd(pfd_pub).revents & ZMQ_POLLOUT) {
 		pub_socket_write();
 	}
 }
 
-void BridgeTask::run_loop()
-{
-	while (!exit) {
-		run();
-	}
-}
-
-void BridgeTask::signal_read()
-{
-	if (sr.read()) {
-		exit = true;
-	}
-}
-
-void BridgeTask::serial_read()
+void Task::serial_read()
 {
 	chunk.clear();
-	serial.read(chunk);
+	serial->read(chunk);
 	std::copy(chunk.cbegin(), chunk.cend(), std::back_inserter(uart_rx_buf));
+	logger("Read ", chunk.size(), " bytes from serial");
 }
 
-void BridgeTask::serial_write()
+void Task::serial_write()
 {
 	chunk.clear();
-	std::copy_n(uart_tx_buf.cbegin(), std::min(chunk.capacity(), uart_tx_buf.size()), std::back_inserter(chunk));
-	serial.write(chunk);
+	const auto begin = uart_tx_buf.cbegin();
+	const auto end = begin + std::min(chunk.capacity(), uart_tx_buf.size());
+	std::copy(begin, end, std::back_inserter(chunk));
+	uart_tx_buf.erase(begin, end);
+	serial->write(chunk);
+	logger("Wrote ", chunk.size(), " bytes from serial");
 }
 
-void BridgeTask::pub_socket_write()
+void Task::pub_socket_write()
 {
 	auto it = decoder.decode_packet(uart_rx_buf.cbegin(), uart_rx_buf.cend(), Util::GeneratorIterator<const std::vector<std::uint8_t>&>(
 		[this] (const auto& packet) {
-			zmq::message_t msg(packet.size());
-			std::copy(packet.cbegin(), packet.cend(), static_cast<std::uint8_t *>(msg.data()));
-			if (!pub.send(msg)) {
-				throw Posix::io_error("Failed to publish ØMQ message");
+			zmq::message_t msg(packet.size() - 1);
+			bool more = (packet[0] & FLAG_MORE) != 0;
+			std::copy(packet.cbegin() + 1, packet.cend(), static_cast<std::uint8_t *>(msg.data()));
+			if (!pub.send(msg, more ? ZMQ_SNDMORE : 0)) {
+				throw SystemError("Failed to publish ØMQ message");
 			}
+			logger("Sent ", packet.size() - 1, " bytes via ØMQ", more ? " [more]" : "");
 		}));
 	uart_rx_buf.erase(uart_rx_buf.cbegin(), it);
 }
 
-void BridgeTask::sub_socket_read()
+void Task::sub_socket_read()
 {
 	zmq::message_t msg;
 	if (!sub.recv(&msg)) {
-		throw Posix::io_error("Failed to receive ØMQ message");
+		throw SystemError("Failed to receive ØMQ message");
 	}
-	const auto first = static_cast<const std::uint8_t *>(msg.data());
-	const auto last = first + msg.size();
-	encoder.encode_packet(first, last, std::back_inserter(uart_tx_buf));
+	/* Is there more to come? */
+	const auto more = sub.getsockopt<int>(ZMQ_RCVMORE);
+	std::uint8_t flags = 0x00 | (more ? FLAG_MORE : 0);
+	/* Write status flags and message data */
+	encoder.open(std::back_inserter(uart_tx_buf));
+	encoder.write(flags, std::back_inserter(uart_tx_buf));
+	encoder.write_n(static_cast<const std::uint8_t *>(msg.data()), msg.size(), std::back_inserter(uart_tx_buf));
+	encoder.close(std::back_inserter(uart_tx_buf));
+	logger("Received ", msg.size(), " bytes via ØMQ", more ? " [more]" : "");
 }
 
-Bridge::Bridge(const Config& config)
+Bridge::Bridge(const Config& config, zmq::context_t& ctx)
 {
-	BridgeTask task(config);
-	task.run_loop();
+	worker = std::thread([&config, &ctx] () {
+		Task task(config, ctx);
+		task.run_loop();
+	});
+}
+
+Bridge::~Bridge()
+{
+	worker.join();
 }
 
 }

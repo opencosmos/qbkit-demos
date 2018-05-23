@@ -16,25 +16,72 @@ struct Config
 
 class Encoder
 {
+	bool opened = false;
 public:
-	template <typename InputIt, typename OutputIt>
-	void encode_packet(InputIt begin, InputIt end, OutputIt out)
-	{
-		*out++ = Config::FEND;
-		for (InputIt& it = begin; it != end; ++it)
-		{
-			const auto byte = *it;
-			if (byte == Config::FEND) {
-				*out++ = Config::FESC;
-				*out++ = Config::TFEND;
-			} else if (byte == Config::FESC) {
-				*out++ = Config::FESC;
-				*out++ = Config::TFESC;
-			} else {
-				*out++ = byte;
-			}
+	bool is_open() const { return opened; }
+
+	template <typename OutputIt>
+	OutputIt open(OutputIt out) {
+		if (opened) {
+			throw std::logic_error("Packet is already open");
 		}
+		opened = true;
 		*out++ = Config::FEND;
+		return out;
+	}
+
+	template <typename OutputIt>
+	OutputIt close(OutputIt out) {
+		if (!opened) {
+			throw std::logic_error("Packet is not open");
+		}
+		opened = false;
+		*out++ = Config::FEND;
+		return out;
+	}
+
+	template <typename OutputIt>
+	OutputIt write(std::uint8_t byte, OutputIt out)
+	{
+		if (byte == Config::FEND) {
+			*out++ = Config::FESC;
+			*out++ = Config::TFEND;
+		} else if (byte == Config::FESC) {
+			*out++ = Config::FESC;
+			*out++ = Config::TFESC;
+		} else {
+			*out++ = byte;
+		}
+		return out;
+	}
+
+	template <typename InputIt, typename OutputIt>
+	OutputIt write(InputIt begin, InputIt end, OutputIt out)
+	{
+		for (InputIt& it = begin; it != end; ++it) {
+			out = write(*it, out);
+		}
+		return out;
+	}
+
+	template <typename InputIt, typename OutputIt>
+	OutputIt write_n(InputIt begin, std::size_t count, OutputIt out)
+	{
+		InputIt& it = begin;
+		while (count-- > 0) {
+			out = write(*it, out);
+			++it;
+		}
+		return out;
+	}
+
+	template <typename InputIt, typename OutputIt>
+	OutputIt encode_packet(InputIt begin, InputIt end, OutputIt out)
+	{
+		out = open(out);
+		out = write(begin, end, out);
+		out = close(out);
+		return out;
 	}
 };
 

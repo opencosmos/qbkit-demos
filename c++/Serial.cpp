@@ -2,6 +2,8 @@
 
 #include <termios.h>
 
+#include "SystemError.hpp"
+
 #include "Serial.hpp"
 
 #define X(b) { b, B##b }
@@ -46,26 +48,26 @@ Serial::Serial(File file, int baud) :
 	const int fd = this->file.fileno();
 	const auto baud_it = baud_constants.find(baud);
 	if (baud_it == baud_constants.end()) {
-		throw io_error("Unsupported baud rate: " + std::to_string(baud));
+		throw SystemError("Unsupported baud rate: " + std::to_string(baud));
 	}
 	/* Get current UART configuration */
 	struct termios t;
 	if (tcgetattr(fd, &t) < 0) {
-		throw io_error("tcgetattr failed");
+		throw SystemError("tcgetattr failed");
 	}
 	/* Set baud in config structure */
 	if (cfsetspeed(&t, baud_it->second) < 0) {
-		throw io_error("cfsetspeed failed");
+		throw SystemError("cfsetspeed failed");
 	}
 	/* Other configuration (no stop bit, no flow control) */
 	t.c_cflag &= ~(CSTOPB | CRTSCTS);
 	/* Re-configure interface */
 	if (tcsetattr(fd, TCSANOW, &t) < 0) {
-		throw io_error("tcsetattr failed");
+		throw SystemError("tcsetattr failed");
 	}
 	/* Flush buffer */
 	if (tcflush(fd, TCIOFLUSH) < 0) {
-		throw io_error("tcflush failed");
+		throw SystemError("tcflush failed");
 	}
 }
 

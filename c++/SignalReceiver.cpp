@@ -1,6 +1,9 @@
 #include <stdexcept>
 
+#include <unistd.h>
 #include <sys/signalfd.h>
+
+#include "SystemError.hpp"
 
 #include "SignalReceiver.hpp"
 
@@ -27,19 +30,22 @@ void SignalReceiver::remove(int signo)
 	::sigdelset(&ss, signo);
 }
 
-void SignalReceiver::set_mask() const
+void SignalReceiver::update() const
 {
 	if (::pthread_sigmask(SIG_BLOCK, &ss, NULL) != 0) {
-		throw std::runtime_error("pthread_sigmask failed");
+		throw SystemError("pthread_sigmask failed");
+	}
+	if (::signalfd(fileno(), &ss, SFD_NONBLOCK) == -1) {
+		throw SystemError("signalfd failed");
 	}
 }
 
-std::optional<struct ::signalfd_siginfo> SignalReceiver::read()
+std::optional<struct ::signalfd_siginfo> SignalReceiver::read() const
 {
 	struct ::signalfd_siginfo ssi;
 	auto res = ::read(file.fileno(), &ssi, sizeof(ssi));
 	if (res == -1) {
-		throw io_error("Failed to read signalfd");
+		throw SystemError("Failed to read signalfd");
 	}
 	if (res == 0) {
 		return std::nullopt;
@@ -48,7 +54,7 @@ std::optional<struct ::signalfd_siginfo> SignalReceiver::read()
 	}
 }
 
-int SignalReceiver::read_signal()
+int SignalReceiver::read_signal() const
 {
 	auto ssi = read();
 	if (ssi) {

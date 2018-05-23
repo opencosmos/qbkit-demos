@@ -1,26 +1,31 @@
 #pragma once
 #include <string>
 #include <cstddef>
+#include <thread>
+
+#include <zmq.hpp>
 
 #include "Kiss.hpp"
+#include "Protocol.hpp"
 
 namespace Bridge {
 
-struct Config
+struct Config :
+	Comms::Config
 {
 	std::string device;
 	int baud;
-	std::string tx_url;
-	std::string rx_url;
 	std::size_t max_packet_size;
-	bool quiet;
+
 	Kiss::Config kiss_config;
 };
 
 class Bridge
 {
+	std::thread worker;
 public:
-	Bridge(const Config& config);
+	Bridge(const Config& config, zmq::context_t& ctx);
+	~Bridge();
 };
 
 }

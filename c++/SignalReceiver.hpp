@@ -12,14 +12,6 @@ class SignalReceiver
 {
 	::sigset_t ss;
 	File file;
-
-	template <typename... T>
-	void var_add(int signo, T... t)
-	{
-		add(signo);
-		var_add(std::forward<int>(t)...);
-	}
-	void var_add() {}
 public:
 	int fileno() const { return file.fileno(); }
 
@@ -27,17 +19,10 @@ public:
 
 	void add(int signo);
 	void remove(int signo);
-	void set_mask() const;
+	void update() const;
 
-	std::optional<struct ::signalfd_siginfo> read();
-	int read_signal();
-
-	template <typename... T>
-	SignalReceiver(T... t) :
-		SignalReceiver()
-	{
-		var_add(std::forward<int>(t)...);
-	}
+	std::optional<struct ::signalfd_siginfo> read() const;
+	int read_signal() const;
 };
 
 }
