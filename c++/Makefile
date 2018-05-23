@@ -9,8 +9,8 @@ out := $(progs:%=$(bin)%)
 
 O ?= 0
 
-CXXFLAGS := -Wall -Wextra -Werror -O$(O) -g -std=gnu++17 -ffunction-sections -fdata-sections
-LDFLAGS := -Wall -Wextra -Werror -O$(O) -g -Wl,--gc-sections
+CXXFLAGS := -Wall -Wextra -Werror -O$(O) -g -std=gnu++17 -ffunction-sections -fdata-sections -flto
+LDFLAGS := -Wall -Wextra -Werror -O$(O) -g -Wl,--gc-sections -flto
 libs := pthread zmq
 
 CXX := clang++
