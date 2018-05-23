@@ -1,10 +1,5 @@
 #include <string>
 #include <stdexcept>
-#include <thread>
-#include <deque>
-#include <iostream>
-
-#include <unistd.h>
 
 #include <getopt.h>
 
@@ -12,8 +7,6 @@
 
 #include "SignalReceiver.hpp"
 #include "SignalDispatcher.hpp"
-#include "Protocol.hpp"
-#include "SystemError.hpp"
 #include "Chat.hpp"
 
 enum args

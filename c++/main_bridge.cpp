@@ -1,5 +1,6 @@
 #include <string>
 #include <stdexcept>
+
 #include <getopt.h>
 
 #include <zmq.hpp>
@@ -7,7 +8,6 @@
 #include "SignalReceiver.hpp"
 #include "SignalDispatcher.hpp"
 #include "Bridge.hpp"
-#include <iostream>
 
 enum args
 {
