@@ -2,8 +2,8 @@
 
 Demos using UDP/ZMQ to communicate with a serial adapter (using KISS protocol).
 
-Demos are in C++ and Python.
+Demos are in C++ (ZMQ), Node.js (ZMQ) and Python (UDP).
 
-The C++ protocol is not compatible with the Python protocol.
+The wire protocol used by C++ and Node.js implemenetations is not compatible with the Python protocol.
 
 The C++ and Node.js implementations are compatible and can talk to each other.
