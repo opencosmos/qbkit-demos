@@ -13,17 +13,31 @@ int File::fileno() const
 	return fd;
 }
 
+static int fcntl_getfl(int fd)
+{
+	int res = ::fcntl(fd, F_GETFL);
+	if (res < 0) {
+		throw SystemError("fcntl:F_GETFL failed");
+	}
+	return res;
+}
+
+File::File(none_t) :
+	fd(-1)
+{
+}
+
 File::File(int fd) :
 	fd(fd)
 {
 	if (fd == -1) {
 		throw SystemError("Failed to open file");
 	}
-	::fcntl(fd, F_SETFL, ::fcntl(fd, F_GETFL) | O_NONBLOCK);
+	::fcntl(fd, F_SETFL, fcntl_getfl(fd) | O_CLOEXEC | O_NONBLOCK);
 }
 
 File::File(const std::string& path, int flags, int mode) :
-	File(open(path.c_str(), flags, mode))
+	File(open(path.c_str(), flags | O_CLOEXEC | O_NONBLOCK, mode))
 {
 }
 
@@ -50,15 +64,33 @@ File& File::operator = (File&& f)
 	return *this;
 }
 
-File::File(File &f) :
-	File(dup(f.fd))
+//File::File(File &f) :
+//	File(dup(f.fd))
+//{
+//}
+
+//File& File::operator = (File& f) {
+//	close();
+//	f.fd = dup(f.fd);
+//	return *this;
+//}
+
+int File::dup() const
 {
+	int ret = dup(fd);
+	if (ret == -1) {
+		throw SystemError("dup() failed");
+	}
+	return ret;
 }
 
-File& File::operator = (File& f) {
-	close();
-	f.fd = dup(f.fd);
-	return *this;
+int File::dup(int target) const
+{
+	int ret = dup2(fd, target);
+	if (ret == -1) {
+		throw SystemError("dup2() failed");
+	}
+	return ret;
 }
 
 void File::close()
@@ -73,7 +105,7 @@ void File::close()
 	}
 }
 
-bool File::read(std::vector<std::uint8_t>& buf)
+bool File::read(std::vector<std::uint8_t>& buf) const
 {
 	buf.resize(buf.capacity());
 	auto result = ::read(fd, buf.data(), buf.size());
@@ -85,7 +117,7 @@ bool File::read(std::vector<std::uint8_t>& buf)
 	return result > 0;
 }
 
-std::size_t File::write(const std::vector<std::uint8_t>& buf)
+std::size_t File::write(const std::vector<std::uint8_t>& buf) const
 {
 	auto result = ::write(fd, buf.data(), buf.size());
 	if (result == -1) {
@@ -94,7 +126,7 @@ std::size_t File::write(const std::vector<std::uint8_t>& buf)
 	return result;
 }
 
-std::size_t File::seek(std::size_t offset, Whence whence)
+std::size_t File::seek(std::size_t offset, Whence whence) const
 {
 	const auto result = ::lseek(fd, offset, whence);
 	if (result == (off_t) -1) {

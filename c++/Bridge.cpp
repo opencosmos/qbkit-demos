@@ -14,7 +14,7 @@
 #include "Serial.hpp"
 #include "GeneratorIterator.hpp"
 #include "SystemError.hpp"
-#include "Task.hpp"
+#include "Reactor.hpp"
 
 #include "Bridge.hpp"
 
@@ -25,7 +25,7 @@ static constexpr std::size_t CHUNK_SIZE = 0x10000;
 static constexpr std::uint8_t FLAG_MORE = 0x01;
 
 class Task :
-	public Util::Task
+	public Util::Reactor
 {
 	Config config;
 	std::optional<Posix::Serial> serial;
@@ -36,10 +36,6 @@ class Task :
 	std::deque<std::uint8_t> uart_rx_buf;
 	std::deque<std::uint8_t> uart_tx_buf;
 	std::vector<std::uint8_t> chunk;
-
-	const int pfd_pub;
-	const int pfd_sub;
-	const int pfd_serial;
 
 	void serial_read();
 	void serial_write();
@@ -64,7 +60,7 @@ static std::optional<Posix::Serial> make_serial(const std::string& device, int b
 }
 
 Task::Task(const Config& config, zmq::context_t& context) :
-	Util::Task(context, "bridge", config.verbose),
+	Util::Reactor(context, "bridge", config.verbose),
 	config(config),
 	serial(make_serial(config.device, config.baud)),
 	pub(context, ZMQ_PUB),
@@ -73,10 +69,7 @@ Task::Task(const Config& config, zmq::context_t& context) :
 	decoder(config.max_packet_size),
 	uart_rx_buf(),
 	uart_tx_buf(),
-	chunk(CHUNK_SIZE),
-	pfd_pub(bind(pub)),
-	pfd_sub(bind(sub)),
-	pfd_serial(bind(serial ? serial->fileno() : -1))
+	chunk(CHUNK_SIZE)
 {
 	/* Configure sockets */
 	pub.setsockopt(ZMQ_LINGER, 0);
@@ -90,27 +83,35 @@ Task::Task(const Config& config, zmq::context_t& context) :
 
 void Task::set_events()
 {
-	get_pfd(pfd_serial).events = serial ? ZMQ_POLLIN | (uart_tx_buf.empty() ? 0 : ZMQ_POLLOUT) : 0;
-	get_pfd(pfd_pub).events = uart_rx_buf.empty() ? 0 : ZMQ_POLLOUT;
-	get_pfd(pfd_sub).events = ZMQ_POLLIN;
+	if (serial) {
+		bind_read(serial->fileno());
+		if (!uart_tx_buf.empty()) {
+			bind_write(serial->fileno());
+		}
+	}
+	if (!uart_rx_buf.empty()) {
+		bind_write(pub);
+	}
+	bind_read(sub);
 }
 
 void Task::handle_events()
 {
-	if (get_pfd(pfd_sub).revents & ZMQ_POLLIN) {
+	if (is_readable(sub)) {
 		sub_socket_read();
 	}
-	if (get_pfd(pfd_serial).revents & ZMQ_POLLOUT) {
-		serial_write();
-	}
-	if (!serial) {
+	if (serial) {
+		if (is_writeable(serial->fileno())) {
+			serial_write();
+		}
+		if (is_readable(serial->fileno())) {
+			serial_read();
+		}
+	} else {
 		std::copy(uart_tx_buf.cbegin(), uart_tx_buf.cend(), std::back_inserter(uart_rx_buf));
 		uart_tx_buf.clear();
 	}
-	if (get_pfd(pfd_serial).revents & ZMQ_POLLIN) {
-		serial_read();
-	}
-	if (get_pfd(pfd_pub).revents & ZMQ_POLLOUT) {
+	if (is_writeable(pub)) {
 		pub_socket_write();
 	}
 }
@@ -169,8 +170,8 @@ void Task::sub_socket_read()
 Bridge::Bridge(const Config& config, zmq::context_t& ctx)
 {
 	worker = std::thread([&config, &ctx] () {
-		Task task(config, ctx);
-		task.run_loop();
+		Task reactor(config, ctx);
+		reactor.run_loop();
 	});
 }
 

@@ -20,30 +20,32 @@ using Stat = struct stat;
  * No two File instances should have the same
  * descriptor.
  *
- * Copy-constructor uses dup().
+ * Sets O_NONBLOCK and O_CLOEXEC.
  */
 class File
 {
 	int fd;
 public:
+	static constexpr struct none_t { } none = { };
 	int fileno() const;
 	enum Whence {
 		absolute = SEEK_SET,
 		relative = SEEK_CUR,
 		from_end = SEEK_END
 	};
+	File(none_t);
 	File(int fd);
 	File(const std::string& path, int flags, int mode = 0);
 	File(const File& dir, const std::string& path, int flags, int mode = 0);
 	~File();
 	File(File&& f);
 	File& operator = (File&& f);
-	File(File &f);
-	File& operator = (File& f);
+	int dup() const;
+	int dup(int target) const;
 	void close();
-	bool read(std::vector<std::uint8_t>& buf);
-	std::size_t write(const std::vector<std::uint8_t>& buf);
-	std::size_t seek(std::size_t offset, Whence whence = absolute);
+	bool read(std::vector<std::uint8_t>& buf) const;
+	std::size_t write(const std::vector<std::uint8_t>& buf) const;
+	std::size_t seek(std::size_t offset, Whence whence = absolute) const;
 	std::size_t tell() const;
 	Stat stat() const;
 };
