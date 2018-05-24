@@ -1,4 +1,19 @@
 #pragma once
+
+/*
+ * Wrapper around serial port.
+ *
+ * Takes ownership of an open file passed to the constructor, and configures the
+ * serial interface represented by it as so:
+ *  - baud: as requested
+ *  - cts/rtx: no
+ *  - xon/xoff: no
+ *  - data bits: 8
+ *  - parity bits: 0
+ *  - start bits: 1
+ *  - stop bits: 0
+ */
+
 #include <vector>
 #include <cstdint>
 #include <cstddef>

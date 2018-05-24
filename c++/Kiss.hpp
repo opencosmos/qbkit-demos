@@ -1,4 +1,10 @@
 #pragma once
+
+/*
+ * Implementation of KISS/SLIP coding scheme, for serialising/deserialising
+ * packets over a serial character link.
+ */
+
 #include <cstddef>
 #include <cstdint>
 #include <vector>

@@ -1,4 +1,14 @@
 #pragma once
+
+/*
+ * Wrapper for tasks which use the reactor pattern.
+ *
+ * Uses zmq_poll for the event loop.
+ *
+ * Subscribes to the SignalDispatcher, in order to receive INT/QUIT/TERM signals
+ * (all of which will result in exiting the event loop).
+ */
+
 #include <vector>
 
 #include <zmq.hpp>

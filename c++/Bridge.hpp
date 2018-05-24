@@ -1,4 +1,11 @@
 #pragma once
+
+/*
+ * Serial/ZMQ bridge implementation.
+ *
+ * Preserves multi-part messages over the serial link.
+ */
+
 #include <string>
 #include <cstddef>
 #include <thread>

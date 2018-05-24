@@ -1,4 +1,11 @@
 #pragma once
+
+/*
+ * Simple logger, which writes to stderr.
+ *
+ * Uses global mutex in order to prevent message mixing on stderr.
+ */
+
 #include <mutex>
 #include <string>
 #include <sstream>

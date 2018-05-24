@@ -1,4 +1,12 @@
 #pragma once
+
+/*
+ * Wrapper around UNIX file descriptor, with error-handling.
+ *
+ * Configures the descriptor for non-blocking IO, so the read/write calls should
+ * be non-blocking as a result.
+ */
+
 #include <string>
 #include <vector>
 

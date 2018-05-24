@@ -1,4 +1,14 @@
 #pragma once
+
+/*
+ * Example instant-messaging program for use with the serial bridge.
+ *
+ * This uses multi-part messages.
+ *
+ * The "command" field is used to transmit a sender's "screen name" with their
+ * mesasge.
+ */
+
 #include <string>
 #include <thread>
 

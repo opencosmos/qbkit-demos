@@ -1,4 +1,16 @@
 #pragma once
+
+/*
+ * Uses signalfd to receive signals.
+ *
+ * When update() is called then the signal descriptor is updated and the
+ * pthread_sigmask is also called in order to block the selected signals.
+ *
+ * Known Bugs:
+ *  - If a signal is later removed and then update() is called, the signal is
+ *    removed from the signalfd but is not unblocked.
+ */
+
 #include <optional>
 
 #include <signal.h>

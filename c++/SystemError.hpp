@@ -1,4 +1,9 @@
 #pragma once
+
+/*
+ * Exception type for errors where extra information is provided by errno.
+ */
+
 #include <string>
 #include <stdexcept>
 

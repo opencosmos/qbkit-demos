@@ -1,4 +1,11 @@
 #pragma once
+
+/*
+ * Wrapper around a pub/sub pair, which "connect" to some remote.
+ *
+ * This can be used to connect to "tunnel" services such as the serial bridge.
+ */
+
 #include <string>
 #include <cstddef>
 
