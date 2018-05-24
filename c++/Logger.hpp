@@ -14,6 +14,9 @@
 class Logger
 {
 	static std::mutex mx;
+	static int next_id;
+	static int get_id();
+
 	template <typename Arg, typename... Args>
 	static void log(std::ostringstream& oss, Arg&& arg, Args&&... args)
 	{
@@ -25,10 +28,12 @@ class Logger
 		(void) oss;
 	}
 
-	std::string name;
+	const int id;
+	const std::string name;
 	bool enabled;
 public:
 	Logger(std::string name, bool enabled = false) :
+		id(get_id()),
 		name(std::move(name)),
 		enabled(enabled)	{ }
 	template <typename... Args>
@@ -40,6 +45,6 @@ public:
 		}
 		std::ostringstream oss;
 		log(oss, std::forward<Args>(args)...);
-		std::cerr << "  [" << name << "] " << oss.str() << std::endl;
+		std::cerr << "  [" << name << ":" << id << "] " << oss.str() << std::endl;
 	}
 };

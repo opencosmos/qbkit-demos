@@ -11,21 +11,20 @@
 #include "SystemError.hpp"
 #include "Protocol.hpp"
 #include "File.hpp"
-#include "Task.hpp"
+#include "Reactor.hpp"
 
 #include "Chat.hpp"
 
 namespace Chat {
 
+static constexpr char msg_command[] = "message";
+
 class Task :
-	public Util::Task
+	public Util::Reactor
 {
 	Config config;
 	Comms::Socket socket;
 	Posix::File in;
-
-	const int pfd_stdin;
-	const int pfd_sub;
 
 	/* STDIN line buffer */
 	std::deque<char> line;
@@ -48,12 +47,10 @@ public:
 };
 
 Task::Task(zmq::context_t& ctx, const Config& config) :
-	Util::Task(ctx, config.host, config.verbose),
+	Util::Reactor(ctx, config.host, config.verbose),
 	config(config),
 	socket(ctx, config),
-	in(STDIN_FILENO),
-	pfd_stdin(bind(STDIN_FILENO)),
-	pfd_sub(bind(socket.get_sub()))
+	in(STDIN_FILENO)
 {
 	buf.reserve(200);
 	logger("Using username \"", config.username, "\"");
@@ -73,12 +70,15 @@ void Task::stdin_read()
 
 void Task::sub_read()
 {
-	std::string sender;
-	std::string username;
+	Comms::Envelope envelope;
 	zmq::message_t msg;
-	if (socket.recv(sender, username, msg)) {
-		std::string message(static_cast<const char *>(msg.data()), msg.size());
-		std::cout << "[" << username << "] " << message << std::endl;
+	if (socket.recv(envelope, msg)) {
+		if (envelope.command == msg_command) {
+			std::string message(static_cast<const char *>(msg.data()), msg.size());
+			std::cout << "[" << envelope.session << "] " << message << std::endl;
+		} else {
+			std::cout << "[" << envelope.session << "] unknown message type: \"" << envelope.command << std::endl;
+		}
 	}
 }
 
@@ -99,24 +99,26 @@ void Task::flush_lines()
 		line.erase(line.cbegin(), eol + 1);
 		zmq::message_t msg(buf.size());
 		std::memcpy(msg.data(), buf.data(), buf.size());
-		socket.send(config.host, config.username, msg);
+		socket.send({ config.host, config.username, msg_command }, std::move(msg));
 	}
 }
 
 void Task::set_events()
 {
-	get_pfd(pfd_stdin).events = eof ? 0 : ZMQ_POLLIN;
-	get_pfd(pfd_sub).events = ZMQ_POLLIN;
+	if (!eof) {
+		bind_read(STDIN_FILENO);
+	}
+	bind_read(socket.get_sub());
 }
 
 void Task::handle_events()
 {
 	/* Read STDIN into buffer */
-	if (get_pfd(pfd_stdin).revents & ZMQ_POLLIN) {
+	if (is_readable(STDIN_FILENO)) {
 		stdin_read();
 	}
 	/* Write received message to STDOUT */
-	if (get_pfd(pfd_sub).revents & ZMQ_POLLIN) {
+	if (is_readable(socket.get_sub())) {
 		sub_read();
 	}
 	/* Write out lines */
@@ -129,8 +131,8 @@ void Task::handle_events()
 
 Chat::Chat(zmq::context_t& ctx, const Config& config) :
 	worker([&] () {
-		Task task(ctx, config);
-		task.run_loop();
+		Task reactor(ctx, config);
+		reactor.run_loop();
 	})
 {
 }

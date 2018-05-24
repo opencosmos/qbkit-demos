@@ -5,8 +5,8 @@
  *
  * This uses multi-part messages.
  *
- * The "command" field is used to transmit a sender's "screen name" with their
- * mesasge.
+ * The "session" field is used to transmit a sender's "screen name" with their
+ * message.
  */
 
 #include <string>
