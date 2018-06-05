@@ -1,6 +1,8 @@
 import asyncio
 import zmq
 
+_no_timeout = object()
+
 class Config():
 	rx_url = None
 	tx_url = None
@@ -61,7 +63,7 @@ class Socket():
 		self.sub.setsockopt(zmq.SUBSCRIBE, encode_label(config.hostname))
 
 	def __enter__(self):
-		self.ctx.__enter__();
+		# self.ctx.__enter__();
 		self.pub.__enter__();
 		self.sub.__enter__();
 		return self
@@ -69,7 +71,7 @@ class Socket():
 	def __exit__(self, *args, **kwargs):
 		self.sub.__exit__(*args, **kwargs);
 		self.pub.__exit__(*args, **kwargs);
-		self.ctx.__exit__(*args, **kwargs);
+		# self.ctx.__exit__(*args, **kwargs);
 		return self
 
 	async def send(self, envelope, *parts):
@@ -82,8 +84,9 @@ class Socket():
 		msg += parts
 		return await self.pub.send_multipart(msg)
 
-	async def recv(self, timeout = None):
-		if timeout is None:
+	async def recv(self, timeout = _no_timeout):
+		global _no_timeout
+		if timeout == _no_timeout:
 			timeout = self.config.timeout
 		if timeout is not None:
 			timeout = timeout * 1000.0
