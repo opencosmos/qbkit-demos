@@ -3,6 +3,7 @@
 import asyncio
 import sys
 import getopt
+import signal
 import aioconsole
 import zmq.asyncio
 
@@ -27,7 +28,7 @@ class Program():
 		# Extract configuration from command line arguments
 		config = Config()
 		try:
-			opts, args = getopt.getopt(cmdline, '', ['tx_url=', 'rx_url=', 'topic=', 'hostname='])
+			opts, args = getopt.getopt(cmdline, '', ['tx_url=', 'rx_url=', 'remote=', 'topic=', 'hostname='])
 
 			for opt, val in opts:
 				if opt in ('--tx_url'):
@@ -54,17 +55,29 @@ class Program():
 
 	async def run(self):
 		ctx = zmq.asyncio.Context(4)
+		signal.signal(signal.SIGINT, self._stop)
 		with Socket(ctx, self.config) as socket:
 			await asyncio.wait([fn(socket) for fn in [self._receiver, self._sender]])
 
+	def _stop(self, *args, **kwargs):
+		self.exit = True
+		sys.exit(0)
+
 	async def _receiver(self, socket):
-		while not self.exit:
-			await self._receiver_loop(socket)
+		try:
+			while not self.exit:
+				if not await self._receiver_loop(socket):
+					self.exit = True
+		except (KeyboardInterrupt, SystemExit):
+			self._stop()
 
 	async def _sender(self, socket):
-		while not self.exit:
-			if not await self._sender_loop(socket):
-				self.exit = True
+		try:
+			while not self.exit:
+				if not await self._sender_loop(socket):
+					self.exit = True
+		except (KeyboardInterrupt, SystemExit):
+			self._stop()
 
 	async def _receiver_loop(self, socket):
 		# Receive message
@@ -77,18 +90,19 @@ class Program():
 		except OperationFailedError as err:
 			print('(Operation failed: ' + err.message + ')')
 			print('')
-		except ReceiveTimeoutError as err:
+		except ReceiveTimeoutError:
 			pass
 		if envelope is None:
-			return
+			return True
 		if envelope.command != 'message':
 			print('(Unknown command: "' + envelope.command + '")')
-			return
+			return True
 		# Print message
 		for part in parts:
 			print('[' + envelope.session + '] ' + str(part, 'utf-8'))
 		# Indicate to input task that message has been received
 		self.next = True
+		return True
 
 	async def _sender_loop(self, socket):
 		envelope = Socket.Envelope(self.config.remote, self.config.session, 'message')
@@ -112,23 +126,26 @@ class Program():
 		return True
 
 	def usage(self):
-		print('Utility for sending commands over UDP.')
+		print('Utility for sending messages over ZMQ.')
 		print('')
-		print('Intended to be used with the UDP/UART bridge.')
+		print('Intended to be used with the ZMQ/UART bridge.')
 		print('')
 		print('Syntax:')
 		print('')
-		print('  ./udp_client.py')
+		print('  ./Chat.py')
 		print('                  --tx_host=' + config.tx_host + ' --tx_port=' + int(config.tx_port))
 		print('                  --rx_host=' + config.rx_host + ' --rx_port=' + int(config.rx_port))
 		print('                  --remote=' + config.remote)
+		print('                  --hostname=' + config.hostname)
 		print('                  --session=' + config.session)
 		print('')
 
 if __name__ == '__main__':
-	zmq.asyncio.install()
-	prog = Program(sys.argv[1:])
-	loop = asyncio.get_event_loop()
-	loop.run_until_complete(prog.run())
-	loop.close()
-
+	try:
+		zmq.asyncio.install()
+		prog = Program(sys.argv[1:])
+		loop = asyncio.get_event_loop()
+		loop.run_until_complete(prog.run())
+		loop.close()
+	except KeyboardInterrupt:
+		pass
