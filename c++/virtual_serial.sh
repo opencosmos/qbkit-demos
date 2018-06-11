@@ -2,6 +2,8 @@
 
 set -eu
 
+cd "$(dirname "$0")"
+
 declare -r base_dev='/var/tmp/serial_chat'
 declare -r a_dev="${base_dev}_a.dev"
 declare -r b_dev="${base_dev}_b.dev"
@@ -13,7 +15,7 @@ declare -r b_rx_url="${base_url}_b_rx.zmq"
 declare -r b_tx_url="${base_url}_b_tx.zmq"
 
 while read line; do
-	tmux splitw -vfl 6 sh -xc "$line"
+	tmux splitw -vfl 6 sh -xc "$line || { echo 'Failed' && read tmp ; }"
 	sleep 0.2
 done < <(
 cat <<EOF
