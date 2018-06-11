@@ -40,15 +40,15 @@ Outputs are in the `./bin` directory.
 	socat PTY,raw,echo=0,link=/tmp/ua PTY,raw,echo=0,link=/tmp/ub
 
 	# Start bridge at "A" end of serial link
-	./bin/bridge --device=/tmp/ua --tx_url=ipc:///var/tmp/ua_tx --rx_url=ipc:///var/tmp/ua_rx
+	./bin/bridge --device=/tmp/ua --client_url=ipc:///var/tmp/ua_tx --server_url=ipc:///var/tmp/ua_rx
 
 	# Start bridge at "B" end of serial link
-	./bin/bridge --device=/tmp/ub --tx_url=ipc:///var/tmp/ub_tx --rx_url=ipc:///var/tmp/ub_rx
+	./bin/bridge --device=/tmp/ub --client_url=ipc:///var/tmp/ub_tx --server_url=ipc:///var/tmp/ub_rx
 
 	# Start chat and connect to bridge of "A" end of serial link
-	./bin/chat --tx_url=ipc:///var/tmp/ua_tx --rx_url=ipc:///var/tmp/ua_rx --username=deadpool
+	./bin/chat --client_url=ipc:///var/tmp/ua_tx --server_url=ipc:///var/tmp/ua_rx --username=deadpool
 
 	# Start chat and connect to bridge of "B" end of serial link
-	./bin/chat --tx_url=ipc:///var/tmp/ub_tx --rx_url=ipc:///var/tmp/ub_rx --username=cable
+	./bin/chat --client_url=ipc:///var/tmp/ub_tx --server_url=ipc:///var/tmp/ub_rx --username=cable
 
 This is automated using `tmux` in the `virtual_serial.sh` script.

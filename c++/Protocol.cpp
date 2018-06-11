@@ -10,19 +10,18 @@ static constexpr bool log_packets = false;
 
 static constexpr char label_delimiter = '\0';
 
-Socket::Socket(zmq::context_t& context, const Config& config) :
+Socket::Socket(zmq::context_t& context, int type, const SocketConfig& config) :
 	logger(config.host, config.verbose),
 	host(config.host),
-	pub(context, ZMQ_PUB),
-	sub(context, ZMQ_SUB)
+	socket(context, type)
 {
-	pub.setsockopt(ZMQ_LINGER, 0);
-	sub.setsockopt(ZMQ_LINGER, 0);
+	pre_connect();
+	socket.connect(config.url);
+}
 
-	pub.connect(config.tx_url);
-	sub.connect(config.rx_url);
-
-	sub.setsockopt(ZMQ_SUBSCRIBE, (host + label_delimiter).c_str(), 0);
+void Socket::pre_connect()
+{
+	socket.setsockopt(ZMQ_LINGER, 0);
 }
 
 static std::pair<bool, bool> do_recv(zmq::socket_t& socket, zmq::message_t& msg)
@@ -111,16 +110,16 @@ void Socket::send(const Envelope& envelope, std::function<std::pair<zmq::message
 {
 	logger("Sending stream with command \"", envelope.command, "\" to session \"", envelope.session, "\" on \"", envelope.remote, "\"");
 	bool success = true;
-	success = success && do_send_label(pub, envelope.remote);
-	success = success && do_send_label(pub, host);
-	success = success && do_send_label(pub, envelope.session);
-	success = success && do_send_label(pub, envelope.command);
+	success = success && do_send_label(socket, envelope.remote);
+	success = success && do_send_label(socket, host);
+	success = success && do_send_label(socket, envelope.session);
+	success = success && do_send_label(socket, envelope.command);
 	bool more = true;
 	while (success && more) {
 		zmq::message_t data;
 		std::tie(data, more) = supplier();
 		const auto size = data.size();
-		success = do_send(pub, std::move(data), more);
+		success = do_send(socket, std::move(data), more);
 		if (success) {
 			logger("Sent part with ", size, " bytes of data");
 		}
@@ -136,20 +135,20 @@ bool Socket::recv(Envelope& envelope, std::function<void(zmq::message_t, bool)> 
 	logger("Receiving stream");
 	bool success = true;
 	std::string target;
-	success = success && do_recv_label(sub, target);
+	success = success && do_recv_label(socket, target);
 	if (target != host) {
 		logger("Stream is addressed to host \"", target, "\" not \"", host, "\"");
-		do_consume(sub);
+		do_consume(socket);
 		return false;
 	}
-	success = success && do_recv_label(sub, envelope.remote);
-	success = success && do_recv_label(sub, envelope.session);
-	success = success && do_recv_label(sub, envelope.command);
+	success = success && do_recv_label(socket, envelope.remote);
+	success = success && do_recv_label(socket, envelope.session);
+	success = success && do_recv_label(socket, envelope.command);
 	logger("Receiving stream with command \"", envelope.command, "\" from session \"", envelope.session, "\" for \"", envelope.remote, "\"");
 	bool more = true;
 	while (success && more) {
 		zmq::message_t data;
-		std::tie(success, more) = do_recv(sub, data);
+		std::tie(success, more) = do_recv(socket, data);
 		auto size = data.size();
 		consumer(std::move(data), more);
 		if (success) {
@@ -158,10 +157,16 @@ bool Socket::recv(Envelope& envelope, std::function<void(zmq::message_t, bool)> 
 	}
 	if (!success) {
 		logger("Failed");
-		do_consume(sub);
+		do_consume(socket);
 		return false;
 	}
 	return true;
+}
+
+void ClientSocket::pre_connect()
+{
+	Socket::pre_connect();
+	socket.setsockopt(ZMQ_RCVTIMEO, timeout * 1000.0f + 0.5f);
 }
 
 }

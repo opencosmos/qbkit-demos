@@ -13,8 +13,8 @@ enum args
 {
 	device,
 	baud,
-	rx_url,
-	tx_url,
+	server_url,
+	client_url,
 	max_packet_size,
 	help = 'h',
 	verbose = 'v',
@@ -25,8 +25,8 @@ static const struct option long_opts[] = {
 	{ "help", no_argument, NULL, help },
 	{ "device", required_argument, NULL, device },
 	{ "baud", required_argument, NULL, baud },
-	{ "rx_url", required_argument, NULL, rx_url },
-	{ "tx_url", required_argument, NULL, tx_url },
+	{ "server_url", required_argument, NULL, server_url },
+	{ "client_url", required_argument, NULL, client_url },
 	{ "max_packet_size", required_argument, NULL, max_packet_size },
 	{ "verbose", no_argument, NULL, verbose },
 	{ NULL, 0, NULL, 0 }
@@ -36,8 +36,8 @@ void bridge_default_config(Bridge::Config& config)
 {
 	config.device = "";
 	config.baud = 9600;
-	config.rx_url = "ipc:///var/tmp/serial_bridge_rx";
-	config.tx_url = "ipc:///var/tmp/serial_bridge_tx";
+	config.server_url = "ipc:///var/tmp/serial_bridge_server";
+	config.client_url = "ipc:///var/tmp/serial_bridge_client";
 	config.max_packet_size = 0x10000;
 	config.verbose = false;
 }
@@ -54,8 +54,8 @@ void bridge_show_usage(const char *argv0)
 	printf("./%s\n", argv0);
 	printf("\t--device=%s\n", config.device.c_str());
 	printf("\t--baud=%d\n", config.baud);
-	printf("\t--rx_url=%s\n", config.rx_url.c_str());
-	printf("\t--tx_url=%s\n", config.tx_url.c_str());
+	printf("\t--server_url=%s\n", config.server_url.c_str());
+	printf("\t--client_url=%s\n", config.client_url.c_str());
 	printf("\t--max_packet_size=0x%zx\n", config.max_packet_size);
 	printf("\t--verbose\n");
 	printf("\n");
@@ -81,8 +81,8 @@ void bridge_parse_config(Bridge::Config& config, int argc, char *argv[])
 		switch (c) {
 		case device: config.device = optarg; break;
 		case baud: config.baud = s2i(optarg); break;
-		case rx_url: config.tx_url = optarg; break;
-		case tx_url: config.rx_url = optarg; break;
+		case server_url: config.client_url = optarg; break;
+		case client_url: config.server_url = optarg; break;
 		case max_packet_size: config.max_packet_size = s2i(optarg); break;
 		case verbose: config.verbose = true; break;
 		case help:

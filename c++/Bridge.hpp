@@ -17,14 +17,19 @@
 
 namespace Bridge {
 
-struct Config :
-	Comms::Config
+struct Config
 {
 	std::string device;
 	int baud;
-	std::size_t max_packet_size;
 
 	Kiss::Config kiss_config;
+
+	std::size_t max_packet_size;
+
+	std::string server_url;
+	std::string client_url;
+
+	bool verbose;
 };
 
 class Bridge

@@ -17,11 +17,22 @@
 
 namespace Comms {
 
-struct Config {
+struct SocketConfig
+{
 	std::string host;
-	std::string rx_url;
-	std::string tx_url;
+	std::string url;
 	bool verbose;
+};
+
+struct ServerSocketConfig :
+	SocketConfig
+{
+};
+
+struct ClientSocketConfig :
+	SocketConfig
+{
+	float timeout; /* seconds */
 };
 
 struct Envelope
@@ -40,11 +51,12 @@ struct Envelope
 class Socket {
 	Logger logger;
 	std::string host;
-	zmq::socket_t pub;
-	zmq::socket_t sub;
-public:
-	Socket(zmq::context_t& context, const Config& config);
+protected:
+	zmq::socket_t socket;
+	Socket(zmq::context_t& context, int type, const SocketConfig& config);
+	virtual void pre_connect();
 
+public:
 	/* Transmit / receive a command with one data part */
 	void send(const Envelope& envelope, zmq::message_t&& data);
 	bool recv(Envelope& envelope, zmq::message_t& msg);
@@ -58,8 +70,24 @@ public:
 	void send(const Envelope& envelope, std::function<std::pair<zmq::message_t, bool>()> supplier);
 	bool recv(Envelope& envelope, std::function<void(zmq::message_t, bool)> consumer);
 
-	zmq::socket_t& get_pub() { return pub; }
-	zmq::socket_t& get_sub() { return sub; }
+	zmq::socket_t& get_socket() { return socket; }
+};
+
+class ClientSocket : public Socket {
+	float timeout;
+	virtual void pre_connect() override;
+public:
+	ClientSocket(zmq::context_t& context, const ClientSocketConfig& config) :
+		Socket(context, ZMQ_REQ, config),
+		timeout(config.timeout)
+	{ }
+};
+
+class ServerSocket : public Socket {
+public:
+	ServerSocket(zmq::context_t& context, const ServerSocketConfig& config) :
+		Socket(context, ZMQ_REP, config)
+	{ }
 };
 
 }
